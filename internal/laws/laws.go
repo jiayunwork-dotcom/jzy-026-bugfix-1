@@ -173,7 +173,7 @@ func evalCycloid(t float64) (s, d1, d2, d3 float64) {
 	s = t - math.Sin(p2*t)/p2
 	d1 = 1 - math.Cos(p2*t)
 	d2 = p2 * math.Sin(p2*t)
-	d3 = p2 * p2 / 2 * math.Cos(p2*t) // 4π²·cos(2πT)
+	d3 = p2 * p2 * math.Cos(p2*t) // 4π²·cos(2πT)，与 S''' 闭式严格同式
 	return
 }
 

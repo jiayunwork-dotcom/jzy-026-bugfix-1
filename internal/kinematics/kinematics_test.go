@@ -180,6 +180,63 @@ func TestCycloidClosedFormPeaks(t *testing.T) {
 	}
 }
 
+// 摆线跃度必须沿整条升程段逐点对得上由 h、beta、omega 写出的同一闭式：
+//
+//	j(T) = 4π²·h·(ω/β)³·cos(2πT)
+//
+// 不能只对两端——历史上两端由解析端值表兜底、内部却另算一套（差一倍），
+// 本测试专盯曲线内部点（尤其中点 T=1/2），防止该毛病复发。
+func TestCycloidJerkPointwiseClosedForm(t *testing.T) {
+	law, _ := laws.Get(laws.Cycloid)
+	p := baseParams() // h=10, beta=120°, omega=6°/s
+	k := p.Omega / p.Beta
+	jPeak := 4 * math.Pi * math.Pi * p.H * k * k * k
+	jerkAt := func(T float64) float64 { return jPeak * math.Cos(2*math.Pi*T) }
+
+	// 内部点（含中点）与端点都纳入逐点核对：全部出自同一解析式。
+	probeT := []float64{0, 0.1, 0.25, 1.0 / 3.0, 0.5, 0.75, 0.9, 1}
+	for _, T := range probeT {
+		got := kinematics.RiseStateAt(law, p, T*p.Beta).J
+		want := jerkAt(T)
+		if !approx(got, want, 1e-12) {
+			t.Errorf("摆线 T=%v 跃度 j=%v 与闭式 %v 不符（端点与内部必须同出一式）", T, got, want)
+		}
+	}
+
+	// 复现参数组：中点跃度约 -0.0493，与两端等量反号。
+	mid := kinematics.RiseStateAt(law, p, p.Beta/2).J
+	if !approx(mid, -jPeak, 1e-12) {
+		t.Errorf("摆线中点 j=%v 期望 -j_max=%v（等量反号）", mid, -jPeak)
+	}
+	start := kinematics.RiseStateAt(law, p, 0).J
+	end := kinematics.RiseStateAt(law, p, p.Beta).J
+	if !approx(start, jPeak, 1e-12) || !approx(end, jPeak, 1e-12) {
+		t.Errorf("摆线两端 j 应为 +j_max=%v，得到 %v, %v", jPeak, start, end)
+	}
+	if !approx(mid, -0.0493, 2e-3) {
+		t.Errorf("h=10,beta=120,omega=6 时中点跃度应约 -0.0493，得到 %v", mid)
+	}
+
+	// 采样曲线上每个内部网格点都要落在闭式上（不只两端）。
+	res, err := kinematics.RiseCurve(law, p, 240)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, q := range res.Points {
+		T := q.Theta / p.Beta
+		if !approx(q.J, jerkAt(T), 1e-12) {
+			t.Fatalf("采样点 i=%d T=%v 的 j=%v 与闭式 %v 不符", i, T, q.J, jerkAt(T))
+		}
+	}
+	// 内部取到负峰、两端取到正峰后，观测峰值应与声明的闭式峰值一致（不再差一倍）。
+	if !approx(res.ObservedPeaks.J, jPeak, 1e-12) {
+		t.Errorf("观测跃度峰值 %v 应等于闭式峰值 %v", res.ObservedPeaks.J, jPeak)
+	}
+	if !approx(res.AnalyticPeaks.J, jPeak, 1e-12) {
+		t.Errorf("声明跃度峰值 %v 应等于闭式 %v", res.AnalyticPeaks.J, jPeak)
+	}
+}
+
 func TestReturnMirror(t *testing.T) {
 	for _, typ := range laws.Types() {
 		law, _ := laws.Get(typ)
