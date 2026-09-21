@@ -107,14 +107,13 @@ func ValuesOf(l laws.Law, t float64) laws.Values {
 }
 
 // RiseStateAt 求升程段内转角 theta 处的有量纲状态（解析闭式，非差分）。
-// theta 被夹到 [0,beta]；落在端点时直接给解析端值，保证与闭式严格一致。
+// theta 被夹到 [0,beta]；端点与内部点同出一套解析式，不另用端值兜底。
 func RiseStateAt(l laws.Law, p Params, theta float64) State {
-	start, end := EndStates(l, p)
-	if theta <= 0 {
-		return start
+	if theta < 0 {
+		theta = 0
 	}
-	if theta >= p.Beta {
-		return end
+	if theta > p.Beta {
+		theta = p.Beta
 	}
 	return riseState(l, p, theta)
 }
@@ -169,7 +168,8 @@ func AnalyticPeaks(l laws.Law, p Params) Peaks {
 }
 
 // SampleRise 沿升程段转角 [0,beta] 均匀采样 n 个间隔（含两端，共 n+1 点）。
-// 端点直接由解析端值给出，保证 s(0)=0、s(beta)=h 严格成立。
+// 端点与内部点一律由同一套解析式求值，不用解析端值表覆盖；
+// 各规律在 T=0、T=1 处的解析式本就给出严格的 0/h 与零速度。
 func SampleRise(l laws.Law, p Params, n int) []Point {
 	if n < 1 {
 		n = 1
@@ -177,15 +177,10 @@ func SampleRise(l laws.Law, p Params, n int) []Point {
 	pts := make([]Point, 0, n+1)
 	for i := 0; i <= n; i++ {
 		theta := p.Beta * float64(i) / float64(n)
-		st := riseState(l, p, theta)
-		if i == 0 {
-			st, _ = EndStates(l, p)
-		}
 		if i == n {
-			_, st = EndStates(l, p)
 			theta = p.Beta
 		}
-		pts = append(pts, Point{Theta: theta, State: st})
+		pts = append(pts, Point{Theta: theta, State: riseState(l, p, theta)})
 	}
 	return pts
 }

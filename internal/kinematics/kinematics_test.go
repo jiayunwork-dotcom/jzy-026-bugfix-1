@@ -180,6 +180,62 @@ func TestCycloidClosedFormPeaks(t *testing.T) {
 	}
 }
 
+// 摆线跃度必须逐点对得上闭式 j(θ)=4π²·h(ω/β)³·cos(2πθ/β)，
+// 重点核对曲线内部点（尤其中点必须与两端等量反号），不许只对两端。
+func TestCycloidJerkPointwiseClosedForm(t *testing.T) {
+	law, _ := laws.Get(laws.Cycloid)
+	p := baseParams() // h=10, beta=120°, omega=6°/s
+	k := p.Omega / p.Beta
+	jPeak := 4 * math.Pi * math.Pi * p.H * k * k * k
+	jerkAt := func(theta float64) float64 {
+		return 4 * math.Pi * math.Pi * p.H * k * k * k * math.Cos(2*math.Pi*theta/p.Beta)
+	}
+
+	// 中点：cos(π)=-1，跃度必须是 -jPeak，而不是只及一半的 -jPeak/2。
+	mid := kinematics.RiseStateAt(law, p, p.Beta/2)
+	if !approx(mid.J, -jPeak, 1e-12) {
+		t.Errorf("摆线中点跃度 j=%v 期望闭式 -4π²h(ω/β)³=%v", mid.J, -jPeak)
+	}
+
+	// 内部点：四等分点与若干非对称位置，全部按同一闭式逐点核对。
+	inner := []float64{0.1, 0.25, 0.37, 0.5, 0.63, 0.75, 0.9}
+	for _, frac := range inner {
+		theta := p.Beta * frac
+		got := kinematics.RiseStateAt(law, p, theta)
+		want := jerkAt(theta)
+		if !approx(got.J, want, 1e-12) {
+			t.Errorf("摆线内部 θ=%v (T=%v) 跃度 j=%v 闭式=%v", theta, frac, got.J, want)
+		}
+	}
+
+	// 采样曲线上的每个点（含端点）都必须与同一闭式一致，
+	// 防止端点靠端值表兜底、内部另算一套。
+	res, err := kinematics.RiseCurve(law, p, 240)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range res.Points {
+		want := jerkAt(q.Theta)
+		if !approx(q.J, want, 1e-10) {
+			t.Errorf("采样点 θ=%v 跃度 j=%v 与闭式 %v 不一致", q.Theta, q.J, want)
+		}
+	}
+
+	// 两端 +jPeak、中点 -jPeak：等量反号，且整条曲线与声明的闭式峰值对得上。
+	if !approx(res.Points[0].J, +jPeak, 1e-12) {
+		t.Errorf("摆线起点跃度 %v 期望 +%v", res.Points[0].J, jPeak)
+	}
+	if !approx(res.Points[len(res.Points)-1].J, +jPeak, 1e-12) {
+		t.Errorf("摆线终点跃度 %v 期望 +%v", res.Points[len(res.Points)-1].J, jPeak)
+	}
+	if !approx(res.AnalyticPeaks.J, jPeak, 1e-12) {
+		t.Errorf("声明的跃度峰值 %v 期望闭式 %v", res.AnalyticPeaks.J, jPeak)
+	}
+	if !approx(res.ObservedPeaks.J, jPeak, 1e-10) {
+		t.Errorf("曲线上观测到的跃度峰值 %v 应取到闭式峰值 %v", res.ObservedPeaks.J, jPeak)
+	}
+}
+
 func TestReturnMirror(t *testing.T) {
 	for _, typ := range laws.Types() {
 		law, _ := laws.Get(typ)

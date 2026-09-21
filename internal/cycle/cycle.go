@@ -204,15 +204,16 @@ func Build(c *Cycle, omega, step float64) (*Result, error) {
 		idx++
 	}
 
-	// 采样：拼接角必落在网格上，段内均匀。
-	points := []kinematics.Point{{Theta: 0, State: segs[0].start}}
+	// 采样：拼接角必落在网格上，段内均匀。端点与内部点同出一套解析式，
+	// 不拿解析端值表覆盖采样点（端值表只用于下面的接头核对）。
+	points := []kinematics.Point{{Theta: 0, State: segs[0].at(0)}}
 	obs := kinematics.Peaks{JBounded: true}
 	accumObs := func(st kinematics.State) {
 		obs.V = math.Max(obs.V, math.Abs(st.V))
 		obs.A = math.Max(obs.A, math.Abs(st.A))
 		obs.J = math.Max(obs.J, math.Abs(st.J))
 	}
-	accumObs(segs[0].start)
+	accumObs(segs[0].at(0))
 	for _, sg := range segs {
 		angle := sg.info.End - sg.info.Start
 		n := int(math.Ceil(angle/step))
@@ -222,9 +223,6 @@ func Build(c *Cycle, omega, step float64) (*Result, error) {
 		for k := 1; k <= n; k++ {
 			local := angle * float64(k) / float64(n)
 			st := sg.at(local)
-			if k == n {
-				st = sg.end // 端点用解析端值，杜绝网格与闭式对不上
-			}
 			points = append(points, kinematics.Point{Theta: sg.info.Start + local, State: st})
 			accumObs(st)
 		}

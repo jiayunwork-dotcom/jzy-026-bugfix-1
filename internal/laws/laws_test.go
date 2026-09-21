@@ -91,6 +91,17 @@ func TestCycloidAnalyticValues(t *testing.T) {
 	if math.Abs(a) > 1e-15 {
 		t.Errorf("摆线中点 A 应为 0，得到 %v", a)
 	}
+	// 跃度必须逐点满足 S'''=4π²·cos(2πT)：两端 +4π²，中点 -4π²（等量反号）。
+	_, _, _, j0 := cycloid.Eval(0)
+	_, _, _, jm := cycloid.Eval(0.5)
+	_, _, _, j1 := cycloid.Eval(1)
+	jPeak := 4 * math.Pi * math.Pi
+	if math.Abs(j0-jPeak) > 1e-12 || math.Abs(j1-jPeak) > 1e-12 {
+		t.Errorf("摆线两端 S''' 应为 4π²，得到 %v, %v", j0, j1)
+	}
+	if math.Abs(jm+jPeak) > 1e-12 {
+		t.Errorf("摆线中点 S''' 应为 -4π²（与两端等量反号），得到 %v", jm)
+	}
 	if math.Abs(cycloid.Peaks.A-2*math.Pi) > 1e-15 {
 		t.Errorf("摆线 Amax 应为 2π，得到 %v", cycloid.Peaks.A)
 	}
