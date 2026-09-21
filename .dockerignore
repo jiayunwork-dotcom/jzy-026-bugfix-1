@@ -1,0 +1,6 @@
+data/
+*.test
+.git/
+Dockerfile
+.dockerignore
+README.md
